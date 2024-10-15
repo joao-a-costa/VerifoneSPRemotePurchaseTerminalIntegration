@@ -202,23 +202,19 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
 
             if (messageStatusCode == StatusCode.OKCommand)
             {
-                var receiptPosIdentification = string.Empty;
-                var receiptDataParsed = DateTime.Now;
-                var receiptData = string.Empty;
-
                 purchaseResult.TransactionId = transactionId;
                 purchaseResult.Amount = amount;
 
                 DateTime.TryParseExact(
                     $"{message.Substring(18, 8)} {message.Substring(107, 6)}",
-                    "yyyyMMdd HHmmss",
+                    _dateTimeFormatOnPOS,
                     CultureInfo.InvariantCulture,
                     DateTimeStyles.None,
-                    out receiptDataParsed
+                    out DateTime receiptDataParsed
                 );
 
-                receiptPosIdentification = message.Substring(26, 8);
-                receiptData = message;
+                var receiptPosIdentification = message.Substring(26, 8);
+                var receiptData = message;
 
                 if (!printReceiptOnPOS)
                 {
