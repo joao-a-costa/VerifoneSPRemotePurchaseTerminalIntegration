@@ -18,7 +18,7 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
         private const string _infoUnknownError = "Erro no processamento. Consulte o terminal para mais detalhes";
 
         private const string _okTerminalStatus = "INIT OK";
-        private const string _okOpenPeriod = "PERÍODO ABERTO";
+        private const string _okOpenPeriod = "00";
         private const string _okClosePeriod = "PERÍODO FECHADO";
         private const string _okPurchase = "000";
         private const string _okRefund = "DEVOL. EFECTUADA";
@@ -74,7 +74,7 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
         /// <param name="command">The command to send.</param>
         public string SendCommand(string command, string tags = "")
         {
-            //var message = string.Empty;
+            var message = string.Empty;
 
             MessageSent?.Invoke(this, command);
 
@@ -82,63 +82,36 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
             {
                 using (var stream = client.GetStream())
                 {
+                    byte[] hexCommand = null;
 
-                    // Command fields
-                    string commandOwner = "GS";     // Command owner
-                    string commandCode = "04";      // Open Period command code
-                    byte commandVersion = 0x03;     // Command version (hexadecimal for 3)
-                    byte centralOperation = 0x01;   // Central operation value
-                    byte receiptPrintingSite = 0x03; // 01: EPOS, 02: POS, 03: EPOS and POS
+                    if (string.IsNullOrEmpty(tags))
+                        hexCommand = Utilities.ConvertHexStringToByteArray(command);
+                    else
+                        hexCommand = Utilities.ConvertHexStringToByteArray(string.Concat(Utilities.CalculateHexLength(command).Select(b => b.ToString("D2"))));
+                    stream.Write(hexCommand, 0, hexCommand.Length);
 
-                    // Prepare the command message
-                    byte[] message = new byte[7];
-                    Encoding.ASCII.GetBytes(commandOwner).CopyTo(message, 0);
-                    Encoding.ASCII.GetBytes(commandCode).CopyTo(message, 2);
-                    message[4] = commandVersion;
-                    message[5] = centralOperation;
-                    message[6] = receiptPrintingSite;
+                    var stringCommand = Encoding.ASCII.GetBytes(command);
+                    stream.Write(stringCommand, 0, stringCommand.Length);
 
-                    // Send the command
-                    stream.Write(message, 0, message.Length);
+                    if (!string.IsNullOrEmpty(tags))
+                    {
+                        var hexCommandLast = Utilities.ConvertHexStringToByteArray(tags);
+                        stream.Write(hexCommandLast, 0, hexCommandLast.Length);
+                    }
 
                     // Receive the response
                     byte[] response = new byte[256];
                     int bytesRead = stream.Read(response, 0, response.Length);
 
                     // Process the response
-                    string responseData = Encoding.ASCII.GetString(response, 0, bytesRead);
-                    Console.WriteLine("Response from terminal: " + responseData);
+                    message = Encoding.ASCII.GetString(response, 0, bytesRead);
+                    Console.WriteLine("Response from terminal: " + message);
 
-                    //byte[] hexCommand = null;
-
-                    //if (string.IsNullOrEmpty(tags))
-                    //    hexCommand = Utilities.CalculateHexLength(command);
-                    //else
-                    //    hexCommand = Utilities.ConvertHexStringToByteArray(string.Concat(Utilities.CalculateHexLength(command).Select(b => b.ToString("D2"))));
-                    //stream.Write(hexCommand, 0, hexCommand.Length);
-
-                    //var stringCommand = Encoding.ASCII.GetBytes(command);
-                    //stream.Write(stringCommand, 0, stringCommand.Length);
-
-                    //if (!string.IsNullOrEmpty(tags))
-                    //{
-                    //    var hexCommandLast = Utilities.ConvertHexStringToByteArray(tags);
-                    //    stream.Write(hexCommandLast, 0, hexCommandLast.Length);
-                    //}
-
-                    //var buffer = new byte[1024];
-                    //using (var ms = new MemoryStream())
-                    //{
-                    //    int bytesRead;
-                    //    while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
-                    //        ms.Write(buffer, 0, bytesRead);
-                    //    message = Encoding.Default.GetString(ms.ToArray()).Substring(2);
-                    //    Console.WriteLine($"{_infoReceived}: {message}");
-                    //}
+                    stream.Close();
                 }
             }
 
-            return string.Empty;
+            return message;
         }
 
         /// <summary>
@@ -160,9 +133,23 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
         public Result OpenPeriod(string transactionId)
         {
             var message = SendCommand(new OpenPeriod().ToString());
+            var messageIdle = SendCommand(new IdleState().ToString());
+            var messageStatusCode = StatusCode.Error;
 
-            return new Result { Success = message.Substring(10).StartsWith(_okOpenPeriod), Message = message };
+            // Extract the status code part from the message and convert it to an integer from hex
+            var statusCodeHex = message.Substring(2, 2);
+            if (int.TryParse(statusCodeHex, NumberStyles.HexNumber, null, out int statusCodeInt) && Enum.IsDefined(typeof(StatusCode), statusCodeInt))
+                messageStatusCode = (StatusCode)statusCodeInt;
+
+            return new Result
+            {
+                Success = message.Substring(2, 2).StartsWith(_okOpenPeriod),
+                Message = message,
+                StatusCode = messageStatusCode,
+                StatusCodeDescription = Utilities.GetEnumDescription(messageStatusCode)
+            };
         }
+
 
         /// <summary>
         /// Closes the period.
@@ -171,6 +158,7 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
         public Result ClosePeriod(string transactionId)
         {
             var message = SendCommand(new ClosePeriod { TransactionId = transactionId }.ToString());
+            var messageIdle = SendCommand(new IdleState().ToString());
 
             return new Result { Success = message.Substring(9).StartsWith(_okClosePeriod), Message = message };
         }
@@ -192,6 +180,8 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
                 PrintReceiptOnPOS = printReceiptOnPOS }.ToString(),
                 _purchaseTags);
             var success = message.Substring(6, 3).Equals(_okPurchase);
+
+            var messageIdle = SendCommand(new IdleState().ToString());
 
             if (success)
             {
@@ -285,6 +275,8 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
                 OriginalReceiptTime = purchaseResult.OriginalReceiptData,
                 PrintReceiptOnPOS = printReceiptOnPOS
             }.ToString());
+
+            var messageIdle = SendCommand(new IdleState().ToString());
 
             var result = new Result
             {

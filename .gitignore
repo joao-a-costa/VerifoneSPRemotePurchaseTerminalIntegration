@@ -9,3 +9,7 @@
 /NewNoteSPRemotePurchaseTerminalIntegration.Console/.vs
 /NewNoteSPRemotePurchaseTerminalIntegration.Lib
 /VerifoneSPRemotePurchaseTerminalIntegration.Lib/nugetPackagePush.cmd
+/VerifoneSPRemotePurchaseTerminalIntegration.Console/obj
+/VerifoneSPRemotePurchaseTerminalIntegration.Console/bin
+/VerifoneSPRemotePurchaseTerminalIntegration.Lib/bin
+/VerifoneSPRemotePurchaseTerminalIntegration.Lib/obj

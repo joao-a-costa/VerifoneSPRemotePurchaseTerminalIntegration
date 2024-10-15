@@ -43,5 +43,31 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
             [Description("ERRO")]
             ERRO = 012,
         }
+
+        public enum StatusCode
+        {
+            [Description("OK Command")]
+            OKCommand = 0x00,
+            [Description("Operation cancelled by the operator")]
+            OperationCancelled = 0x71,
+            [Description("Communications Anomaly")]
+            CommunicationsAnomaly = 0x72,
+            [Description("SIBS refused operation")]
+            SIBSRefusedOperation = 0x75,
+            [Description("Not Configured Terminal")]
+            NotConfiguredTerminal = 0x76,
+            [Description("Invalid Period")]
+            InvalidPeriod = 0x77,
+            [Description("Card Detected in the Reader")]
+            CardDetectedInReader = 0x4350,
+            [Description("Timeout in the Supervisors’ Features")]
+            TimeoutInSupervisorsFeatures = 0x80,
+            [Description("Wrong Command Size")]
+            WrongCommandSize = 0x82,
+            [Description("Invalid Central operation")]
+            InvalidCentralOperation = 0x92,
+            [Description("Error: Unable to Parse")]
+            Error = 9999
+        }
     }
 }

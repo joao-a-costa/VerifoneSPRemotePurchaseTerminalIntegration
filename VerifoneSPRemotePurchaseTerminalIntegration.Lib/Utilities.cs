@@ -10,12 +10,14 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
         /// <summary>
         /// Gets the description of the enum value.
         /// </summary>
+        /// <typeparam name="T">The enum type.</typeparam>
         /// <param name="value">The enum value to get the description of.</param>
         /// <returns>The description of the enum value.</returns>
-        public static string GetEnumDescription(TerminalCommandOptions value)
+        public static string GetEnumDescription<T>(T value) where T : Enum
         {
             var field = value.GetType().GetField(value.ToString());
-            var attribute = (DescriptionAttribute)field.GetCustomAttribute(typeof(DescriptionAttribute));
+            var attribute = field.GetCustomAttribute<DescriptionAttribute>();
+
             return attribute == null ? value.ToString() : attribute.Description;
         }
 

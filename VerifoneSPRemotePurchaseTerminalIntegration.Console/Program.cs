@@ -64,7 +64,7 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Console
                             VerifoneSPRemote.TerminalStatus();
                             break;
                         case TerminalCommandOptions.SendTerminalOpenPeriod:
-                            VerifoneSPRemote.OpenPeriod("0001");
+                            var teste = VerifoneSPRemote.OpenPeriod("0001");
                             break;
                         case TerminalCommandOptions.SendTerminalClosePeriod:
                             VerifoneSPRemote.ClosePeriod("0001");
