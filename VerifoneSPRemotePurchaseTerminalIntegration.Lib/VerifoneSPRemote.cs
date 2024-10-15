@@ -31,7 +31,8 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
         private const string _patternReceiptOnPOSTime = @"(\d{6})";
         private const string _dateTimeFormatOnPOS = "yyyyMMdd HHmmss";
 
-        private const string _purchaseTags = "0B9F1C009A009F21009F4100";
+        //private const string _purchaseTags = "0B9F1C009A009F21009F4100";
+        private const string _purchaseTags = "";
 
 
         #endregion
@@ -191,11 +192,15 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
                 Amount = amount,
                 PrintReceiptOnPOS = printReceiptOnPOS }.ToString(),
                 _purchaseTags);
-            var success = message.Substring(6, 3).Equals(_okPurchase);
-
             var messageIdle = SendCommand(new IdleState().ToString());
+            var messageStatusCode = StatusCode.Error;
 
-            if (success)
+            // Extract the status code part from the message and convert it to an integer from hex
+            var statusCodeHex = message.Substring(2, 2);
+            if (int.TryParse(statusCodeHex, NumberStyles.HexNumber, null, out int statusCodeInt) && Enum.IsDefined(typeof(StatusCode), statusCodeInt))
+                messageStatusCode = (StatusCode)statusCodeInt;
+
+            if (messageStatusCode == StatusCode.OKCommand)
             {
                 var receiptPosIdentification = string.Empty;
                 var receiptDataParsed = DateTime.Now;
@@ -204,72 +209,102 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
                 purchaseResult.TransactionId = transactionId;
                 purchaseResult.Amount = amount;
 
+                DateTime.TryParseExact(
+                    $"{message.Substring(18, 8)} {message.Substring(107, 6)}",
+                    "yyyyMMdd HHmmss",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out receiptDataParsed
+                );
+
+                receiptPosIdentification = message.Substring(26, 8);
+                receiptData = message;
+
                 if (!printReceiptOnPOS)
                 {
-                    // Match Ident. TPA for terminal ID, date, and time:
-                    var matchIdentTpa = Regex.Match(message, _patternReceiptOnECRTerminalIDAndDate);
-                    if (matchIdentTpa.Success)
-                    {
-                        DateTime.TryParseExact(
-                            matchIdentTpa.Groups[2].Value + " " + matchIdentTpa.Groups[3].Value,
-                            _dateTimeFormatOnECR,
-                            CultureInfo.InvariantCulture,
-                            DateTimeStyles.None,
-                            out receiptDataParsed
-                        );
+                    //DateTime.TryParseExact(
+                    //    message.Substring(18, 8),
+                    //    "yyyMMdd",
+                    //    CultureInfo.InvariantCulture,
+                    //    DateTimeStyles.None,
+                    //    out receiptDataParsed
+                    //);
 
-                        receiptPosIdentification = matchIdentTpa.Groups[1].Value;
-                        receiptData = message.Substring(29);
-                    }
+                    //receiptPosIdentification = message.Substring(26, 8);
+
+                    //// Match Ident. TPA for terminal ID, date, and time:
+                    //var matchIdentTpa = Regex.Match(message, _patternReceiptOnECRTerminalIDAndDate);
+                    //if (matchIdentTpa.Success)
+                    //{
+                    //    DateTime.TryParseExact(
+                    //        matchIdentTpa.Groups[2].Value + " " + matchIdentTpa.Groups[3].Value,
+                    //        _dateTimeFormatOnECR,
+                    //        CultureInfo.InvariantCulture,
+                    //        DateTimeStyles.None,
+                    //        out receiptDataParsed
+                    //    );
+
+                    //    receiptPosIdentification = matchIdentTpa.Groups[1].Value;
+                    //    receiptData = message.Substring(29);
+                    //}
                 }
-                else
-                {
-                    // Define regex patterns for terminal ID, date, and time
-                    string terminalIdPattern = _patternReceiptOnPOSTerminalID;  // Matches 8 digits after a specific control character
-                    string datePattern = _patternReceiptOnPOSDate;  // Matches 8 digits (YYYYMMDD) for date
-                    string timePattern = _patternReceiptOnPOSTime;  // Matches 6 digits (HHMMSS) for time
+                //else
+                //{
+                //    // Define regex patterns for terminal ID, date, and time
+                //    string terminalIdPattern = _patternReceiptOnPOSTerminalID;  // Matches 8 digits after a specific control character
+                //    string datePattern = _patternReceiptOnPOSDate;  // Matches 8 digits (YYYYMMDD) for date
+                //    string timePattern = _patternReceiptOnPOSTime;  // Matches 6 digits (HHMMSS) for time
 
-                    // Find matches for terminal ID, date, and time
-                    Match terminalIdMatch = Regex.Match(message, terminalIdPattern);
+                //    // Find matches for terminal ID, date, and time
+                //    Match terminalIdMatch = Regex.Match(message, terminalIdPattern);
 
-                    if (terminalIdMatch.Success)
-                    {
-                        receiptPosIdentification = terminalIdMatch.Groups[1].Value;
+                //    if (terminalIdMatch.Success)
+                //    {
+                //        receiptPosIdentification = terminalIdMatch.Groups[1].Value;
 
-                        Match dateMatch = Regex.Match(message.Substring(terminalIdMatch.Index + terminalIdMatch.Length), datePattern);
+                //        Match dateMatch = Regex.Match(message.Substring(terminalIdMatch.Index + terminalIdMatch.Length), datePattern);
 
-                        if (dateMatch.Success)
-                        {
-                            Match timeMatch = Regex.Match(message.Substring(terminalIdMatch.Index + terminalIdMatch.Length + dateMatch.Index + dateMatch.Length), timePattern);
+                //        if (dateMatch.Success)
+                //        {
+                //            Match timeMatch = Regex.Match(message.Substring(terminalIdMatch.Index + terminalIdMatch.Length + dateMatch.Index + dateMatch.Length), timePattern);
 
-                            if (timeMatch.Success)
-                            {
-                                DateTime.TryParseExact(
-                                    dateMatch.Groups[1].Value + " " + timeMatch.Groups[1].Value,
-                                    _dateTimeFormatOnPOS,
-                                    CultureInfo.InvariantCulture,
-                                    DateTimeStyles.None,
-                                    out receiptDataParsed
-                                );
-                            }
-                        }
-                    }
-                }
+                //            if (timeMatch.Success)
+                //            {
+                //                DateTime.TryParseExact(
+                //                    dateMatch.Groups[1].Value + " " + timeMatch.Groups[1].Value,
+                //                    _dateTimeFormatOnPOS,
+                //                    CultureInfo.InvariantCulture,
+                //                    DateTimeStyles.None,
+                //                    out receiptDataParsed
+                //                );
+                //            }
+                //        }
+                //    }
+                //}
 
                 purchaseResult.OriginalPosIdentification = receiptPosIdentification;
                 purchaseResult.OriginalReceiptData = receiptDataParsed;
                 purchaseResult.ReceiptData = receiptData;
             }
 
-            var result = new Result
+            //var result = new Result
+            //{
+            //    Success = success,
+            //    ExtraData = purchaseResult
+            //};
+
+            //result.Message = result.Success ? message : ParseErrorResponse(message);
+
+            return new Result
             {
-                Success = success,
+                Success = message.Substring(2, 2).StartsWith(_okOpenPeriod),
+                Message = message,
+                StatusCode = messageStatusCode,
+                StatusCodeDescription = Utilities.GetEnumDescription(messageStatusCode),
                 ExtraData = purchaseResult
             };
 
-            result.Message = result.Success ? message : ParseErrorResponse(message);
-
-            return result;
+            //return result;
         }
 
         /// <summary>

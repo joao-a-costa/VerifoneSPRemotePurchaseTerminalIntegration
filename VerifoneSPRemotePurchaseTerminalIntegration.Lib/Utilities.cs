@@ -53,5 +53,26 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
             }
             return bytes;
         }
+
+        /// <summary>
+        /// Converts a string to a hex string.
+        /// </summary>
+        /// <param name="input">The string to convert.</param>
+        /// <returns>The hex string.</returns>
+        public static string ConvertToHexString(string input)
+        {
+            // Create an array to store the hexadecimal values
+            string[] hexArray = new string[input.Length];
+
+            // Iterate over each character in the string
+            for (int i = 0; i < input.Length; i++)
+            {
+                // Convert the character to its byte value and format it as a hexadecimal string
+                hexArray[i] = ((int)input[i]).ToString("X2");
+            }
+
+            // Join the array into a single string separated by spaces
+            return string.Join(" ", hexArray);
+        }
     }
 }
