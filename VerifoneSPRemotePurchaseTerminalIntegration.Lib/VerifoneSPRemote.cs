@@ -157,10 +157,22 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
         /// <param name="transactionId">The transaction identifier.</param>
         public Result ClosePeriod(string transactionId)
         {
-            var message = SendCommand(new ClosePeriod { TransactionId = transactionId }.ToString());
+            var message = SendCommand(new ClosePeriod().ToString());
             var messageIdle = SendCommand(new IdleState().ToString());
+            var messageStatusCode = StatusCode.Error;
 
-            return new Result { Success = message.Substring(9).StartsWith(_okClosePeriod), Message = message };
+            // Extract the status code part from the message and convert it to an integer from hex
+            var statusCodeHex = message.Substring(2, 2);
+            if (int.TryParse(statusCodeHex, NumberStyles.HexNumber, null, out int statusCodeInt) && Enum.IsDefined(typeof(StatusCode), statusCodeInt))
+                messageStatusCode = (StatusCode)statusCodeInt;
+
+            return new Result
+            {
+                Success = message.Substring(2, 2).StartsWith(_okOpenPeriod),
+                Message = message,
+                StatusCode = messageStatusCode,
+                StatusCodeDescription = Utilities.GetEnumDescription(messageStatusCode)
+            };
         }
 
         /// <summary>

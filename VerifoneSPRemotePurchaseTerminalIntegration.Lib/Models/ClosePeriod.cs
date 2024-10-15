@@ -2,13 +2,11 @@
 {
     internal class ClosePeriod
     {
-        private const string _commandClosePeriod = "S00110#TRANSACTIONID#010";
-
-        public string TransactionId { get; set; }
+        private const string _commandClosePeriod = "08004753303505010102";
 
         override public string ToString()
         {
-           return $"{_commandClosePeriod.Replace("#TRANSACTIONID#", TransactionId.PadLeft(4, '0'))}";
+            return $"{_commandClosePeriod}";
         }
     }
 }
