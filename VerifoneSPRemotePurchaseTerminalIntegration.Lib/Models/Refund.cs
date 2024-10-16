@@ -4,7 +4,7 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib.Models
 {
     internal class Refund
     {
-        private const string _commandRefund = "C00210#TRANSACTIONID##AMOUNT##ORIGINALPOSIDENTIFICATION##ORIGINALRECEIPTDATA##ORIGINALRECEIPTTIME##PRINTRECEIPTONPOS#0";
+        private const string _commandRefund = "2E004753303702#TRANSACTIONID#01#OriginalPosIdentification##OriginalReceiptData##OriginalReceiptTime##AMOUNT#";
 
         public string TransactionId { get; set; }
         public string Amount { get; set; }
@@ -16,18 +16,13 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib.Models
         override public string ToString()
         {
             return _commandRefund
-                .Replace("#TRANSACTIONID#", TransactionId.PadLeft(4, '0'))
-                .Replace("#AMOUNT#", Amount.PadLeft(8, '0'))
-                .Replace("#ORIGINALPOSIDENTIFICATION#", OriginalPosIdentification?.PadLeft(8, '0'))
-                .Replace("#ORIGINALRECEIPTDATA#",
-                    OriginalReceiptData.Year.ToString().PadLeft(4, '0') +
-                    OriginalReceiptData.Month.ToString().PadLeft(2, '0') +
-                    OriginalReceiptData.Day.ToString().PadLeft(2, '0'))
-                .Replace("#ORIGINALRECEIPTTIME#",
-                    OriginalReceiptTime.Hour.ToString().PadLeft(2, '0') +
-                    OriginalReceiptTime.Minute.ToString().PadLeft(2, '0') +
-                    OriginalReceiptTime.Second.ToString().PadLeft(2, '0'))
-                .Replace("#PRINTRECEIPTONPOS#", Convert.ToByte(PrintReceiptOnPOS).ToString());
+                .Replace("#TRANSACTIONID#", Utilities.ConvertToHexString(TransactionId.PadLeft(10, '0')).Replace(" ", string.Empty))
+                .Replace("#OriginalPosIdentification#", Utilities.ConvertToHexString(OriginalPosIdentification.PadLeft(8, '0')).Replace(" ", string.Empty))
+                .Replace("#OriginalReceiptData#", Utilities.ConvertToHexString(OriginalReceiptData.ToString("yyyyMMdd")).Replace(" ", string.Empty))
+                .Replace("#OriginalReceiptTime#", Utilities.ConvertToHexString(OriginalReceiptTime.ToString("HHmmss")).Replace(" ", string.Empty))
+                .Replace("#AMOUNT#", Utilities.ConvertToHexString(Amount.PadLeft(8, '0')).Replace(" ", string.Empty))
+                .Replace("#PRINTRECEIPTONPOS#", Convert.ToByte(PrintReceiptOnPOS).ToString().PadLeft(2, '0'))
+            ;
         }
     }
 }

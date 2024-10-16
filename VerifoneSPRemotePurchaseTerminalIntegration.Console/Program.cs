@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net.Sockets;
 using VerifoneSPRemotePurchaseTerminalIntegration.Lib;
+using VerifoneSPRemotePurchaseTerminalIntegration.Lib.Models;
 using static VerifoneSPRemotePurchaseTerminalIntegration.Lib.Enums;
 
 namespace VerifoneSPRemotePurchaseTerminalIntegration.Console
@@ -16,9 +17,6 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Console
 
         #region "Members"
 
-        //private static readonly string serverIp = "192.168.40.175";
-        //private static readonly string serverIp = "192.168.1.252";
-        //private static readonly int port = 15200;
         private static readonly string serverIp = "192.168.40.175";
         private static readonly int port = 5005;
 
@@ -49,6 +47,7 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Console
         private static void ListenForUserInput()
         {
             var serverIsRunning = true;
+            Result lastProcessPaymentResult = null;
 
             while (serverIsRunning)
             {
@@ -64,17 +63,21 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Console
                             VerifoneSPRemote.TerminalStatus();
                             break;
                         case TerminalCommandOptions.SendTerminalOpenPeriod:
-                            var teste = VerifoneSPRemote.OpenPeriod("0001");
+                            VerifoneSPRemote.OpenPeriod();
                             break;
                         case TerminalCommandOptions.SendTerminalClosePeriod:
-                            VerifoneSPRemote.ClosePeriod("0001");
+                            VerifoneSPRemote.ClosePeriod();
                             break;
                         case TerminalCommandOptions.SendProcessPaymentRequest:
-                            VerifoneSPRemote.Purchase("0001", Convert.ToInt32((Math.Round(new Random().NextDouble() * (1.99 - 0.01) + 0.01, 2)) * 100).ToString().PadLeft(8, '0'),
+                            lastProcessPaymentResult = VerifoneSPRemote.Purchase(new Random().Next(1000, 10000).ToString(), Convert.ToInt32((Math.Round(new Random().NextDouble() * (1.99 - 0.01) + 0.01, 2)) * 100).ToString().PadLeft(8, '0'),
                                 false);
                             break;
                         case TerminalCommandOptions.SendProcessRefundRequest:
-                            VerifoneSPRemote.Refund(new Lib.Models.PurchaseResult());
+
+                            if (lastProcessPaymentResult == null)
+                                System.Console.WriteLine("Please process a payment first.");
+                            else
+                                VerifoneSPRemote.Refund((PurchaseResult)lastProcessPaymentResult.ExtraData);
                             break;
                         case TerminalCommandOptions.ShowListOfCommands:
                             ShowListOfCommands();
