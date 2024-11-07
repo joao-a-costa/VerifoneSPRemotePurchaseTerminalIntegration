@@ -2,11 +2,18 @@
 using System.Reflection;
 using System.ComponentModel;
 using static VerifoneSPRemotePurchaseTerminalIntegration.Lib.Enums;
+using System.Text.RegularExpressions;
+using VerifoneSPRemotePurchaseTerminalIntegration.Lib.Models;
 
 namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
 {
     public static class Utilities
     {
+        private const string _ReceiptStringMerchantCopy = "CÓPIA COMERCIANTE";
+        private const string _ReceiptStringClientCopy = "CÓPIA CLIENTE";
+        private const string _ReceiptStringMerchantCopyNoAccents = "COPIA COMERCIANTE";
+        private const string _ReceiptStringClientCopyNoAccents = "COPIA CLIENTE";
+
         /// <summary>
         /// Gets the description of the enum value.
         /// </summary>
@@ -73,6 +80,48 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
 
             // Join the array into a single string separated by spaces
             return string.Join(" ", hexArray);
+        }
+
+        /// <summary>
+        /// Converts the receipt to a more readable format
+        /// </summary>
+        /// <param name="receiptData">The receipt to format</param>
+        /// <returns>The formatted receipt</returns>
+        public static PurchaseResultReceipt ReceiptDataFormat(string receiptData)
+        {
+            var merchantCopy = string.Empty;
+            var clientCopy = string.Empty;
+
+            var receiptDataFormatted = receiptData?
+                .Replace("             ", Environment.NewLine)
+                .Replace("      ", Environment.NewLine)
+                .Replace("TC:", Environment.NewLine + "TC:")
+                .Replace("Id.Estab:", Environment.NewLine + "Id.Estab:")
+                .Replace("Per:", Environment.NewLine + "Per:")
+                .Replace("AUT:", Environment.NewLine + "AUT:")
+                .Replace("Mg", Environment.NewLine + "Mg")
+                .Replace("COMPRA\r\n   ", "COMPRA         ")
+                                    ;
+            receiptDataFormatted = Regex.Replace(receiptDataFormatted,
+                @"(\d{2}-\d{2}-\d{2})", Environment.NewLine + "$1");
+
+            receiptDataFormatted = receiptDataFormatted.Replace($"€", string.Empty);
+
+            string[] receipts = receiptDataFormatted.Split(new[] { _ReceiptStringMerchantCopy,
+                _ReceiptStringClientCopy },
+                StringSplitOptions.None);
+
+            if (receipts.Length > 1)
+            {
+                merchantCopy = receipts[0] + _ReceiptStringMerchantCopyNoAccents;
+                clientCopy = receipts[1]?.Substring(3) + _ReceiptStringClientCopyNoAccents;
+            }
+
+            return new PurchaseResultReceipt
+            {
+                MerchantCopy = merchantCopy,
+                ClientCopy = clientCopy
+            };
         }
     }
 }
