@@ -208,7 +208,7 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
 
                 purchaseResult.OriginalPosIdentification = receiptPosIdentification;
                 purchaseResult.OriginalReceiptData = receiptDataParsed;
-                purchaseResult.ReceiptData = receiptData;
+                purchaseResult.ReceiptData = Utilities.ReceiptDataFormat(receiptData);
             }
 
             return new Result
