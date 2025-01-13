@@ -14,7 +14,7 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
     {
         #region "Constants"
 
-        private const string _okOpenPeriod = "00";
+        private const string _okMessage = "00";
         private const string _dateTimeFormatOnPOS = "yyyyMMdd HHmmss";
 
         #endregion
@@ -51,6 +51,8 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
 
         #endregion
 
+        #region "Private Methods"
+
         /// <summary>
         /// Sends the command to the server.
         /// </summary>
@@ -83,7 +85,7 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
                     }
 
                     // Receive the response
-                    byte[] response = new byte[256];
+                    byte[] response = new byte[20148];
                     int bytesRead = stream.Read(response, 0, response.Length);
 
                     // Process the response
@@ -98,6 +100,32 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
 
             return message;
         }
+
+        /// <summary>
+        /// Calculates the length of the receipt.
+        /// </summary>
+        /// <param name="binaryPart">The binary part of the receipt.</param>
+        /// <returns>The length of the receipt.</returns>
+        private static int CalculateReceiptLenght(string binaryPart)
+        {
+            // Step 2: Convert each character to its ASCII hex representation
+            byte[] asciiBytes = Encoding.ASCII.GetBytes(binaryPart);
+            string asciiHex = BitConverter.ToString(asciiBytes).Replace("-", ""); // Get hex as a string
+            Console.WriteLine($"ASCII Hex: {asciiHex}"); // Output will be "0178" instead of "7801"
+
+            // Step 3: Swap endianness (change byte order)
+            //string swappedHex = asciiHex.Substring(2, 2) + asciiHex.Substring(0, 2); // Swap bytes: "0178" -> "7801"
+            string swappedHex = asciiHex;
+            Console.WriteLine($"Swapped Endianness: {swappedHex}"); // Output: "0178"
+
+            // Step 4: Convert to integer
+            int receiptLength = Convert.ToInt32(swappedHex, 16); // Convert from hex to integer
+            Console.WriteLine($"Receipt Length: {receiptLength} bytes"); // Output: 376
+
+            return receiptLength;
+        }
+
+        #endregion
 
         /// <summary>
         /// Terminal status.
@@ -123,6 +151,7 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
         /// <param name="transactionId">The transaction identifier.</param>
         public Result OpenPeriod()
         {
+            var purchaseResult = new PurchaseResult();
             var message = SendCommand(new OpenPeriod().ToString());
             SendCommand(new IdleState().ToString());
             var messageStatusCode = StatusCode.Error;
@@ -132,15 +161,43 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
             if (int.TryParse(statusCodeHex, NumberStyles.HexNumber, null, out int statusCodeInt) && Enum.IsDefined(typeof(StatusCode), statusCodeInt))
                 messageStatusCode = (StatusCode)statusCodeInt;
 
+            if (messageStatusCode == StatusCode.OKCommand)
+            {
+                //purchaseResult.TransactionId = transactionId;
+                //purchaseResult.Amount = amount;
+
+                //DateTime.TryParseExact(
+                //    $"{message.Substring(18, 8)} {message.Substring(107, 6)}",
+                //    _dateTimeFormatOnPOS,
+                //    CultureInfo.InvariantCulture,
+                //    DateTimeStyles.None,
+                //    out DateTime receiptDataParsed
+                //);
+
+                //var receiptPosIdentification = message.Substring(26, 8);
+
+                var merchantReceiptBinaryPart = message.Substring(21).Substring(0, 2);
+                var merchantReceiptLenght = CalculateReceiptLenght(merchantReceiptBinaryPart);
+                var merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(23, merchantReceiptLenght)));
+
+                //purchaseResult.OriginalPosIdentification = receiptPosIdentification;
+                //purchaseResult.OriginalReceiptData = receiptDataParsed;
+                purchaseResult.ReceiptData = new PurchaseResultReceipt
+                {
+                    MerchantCopy = merchantReceipt,
+                    //ClientCopy = clientReceipt
+                };
+            }
+
             return new Result
             {
-                Success = message.Substring(2, 2).StartsWith(_okOpenPeriod),
+                Success = message.Substring(2, 2).StartsWith(_okMessage),
                 Message = message,
                 StatusCode = messageStatusCode,
-                StatusCodeDescription = Utilities.GetEnumDescription(messageStatusCode)
+                StatusCodeDescription = Utilities.GetEnumDescription(messageStatusCode),
+                ExtraData = purchaseResult
             };
         }
-
 
         /// <summary>
         /// Closes the period.
@@ -148,6 +205,7 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
         /// <param name="transactionId">The transaction identifier.</param>
         public Result ClosePeriod()
         {
+            var purchaseResult = new PurchaseResult();
             var message = SendCommand(new ClosePeriod().ToString());
             SendCommand(new IdleState().ToString());
             var messageStatusCode = StatusCode.Error;
@@ -157,12 +215,41 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
             if (int.TryParse(statusCodeHex, NumberStyles.HexNumber, null, out int statusCodeInt) && Enum.IsDefined(typeof(StatusCode), statusCodeInt))
                 messageStatusCode = (StatusCode)statusCodeInt;
 
+            if (messageStatusCode == StatusCode.OKCommand)
+            {
+                //purchaseResult.TransactionId = transactionId;
+                //purchaseResult.Amount = amount;
+
+                //DateTime.TryParseExact(
+                //    $"{message.Substring(18, 8)} {message.Substring(107, 6)}",
+                //    _dateTimeFormatOnPOS,
+                //    CultureInfo.InvariantCulture,
+                //    DateTimeStyles.None,
+                //    out DateTime receiptDataParsed
+                //);
+
+                //var receiptPosIdentification = message.Substring(26, 8);
+
+                var merchantReceiptBinaryPart = message.Substring(71).Substring(0, 2);
+                var merchantReceiptLenght = CalculateReceiptLenght(merchantReceiptBinaryPart);
+                var merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(73, merchantReceiptLenght)));
+
+                //purchaseResult.OriginalPosIdentification = receiptPosIdentification;
+                //purchaseResult.OriginalReceiptData = receiptDataParsed;
+                purchaseResult.ReceiptData = new PurchaseResultReceipt
+                {
+                    MerchantCopy = merchantReceipt,
+                    //ClientCopy = clientReceipt
+                };
+            }
+
             return new Result
             {
-                Success = message.Substring(2, 2).StartsWith(_okOpenPeriod),
+                Success = message.Substring(2, 2).StartsWith(_okMessage),
                 Message = message,
                 StatusCode = messageStatusCode,
-                StatusCodeDescription = Utilities.GetEnumDescription(messageStatusCode)
+                StatusCodeDescription = Utilities.GetEnumDescription(messageStatusCode),
+                ExtraData = purchaseResult
             };
         }
 
@@ -204,16 +291,27 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
                 );
 
                 var receiptPosIdentification = message.Substring(26, 8);
-                var receiptData = message;
+
+                var merchantReceiptBinaryPart = message.Substring(195).Substring(0, 2);
+                var merchantReceiptLenght = CalculateReceiptLenght(merchantReceiptBinaryPart);
+                var merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(198, merchantReceiptLenght)));
+
+                var clientReceiptBinaryPart = message.Substring(198 + merchantReceiptLenght).Substring(0, 2);
+                //var clientReceiptLenght = CalculateReceiptLenght(clientReceiptBinaryPart);
+                var clientReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(198 + merchantReceiptLenght + 2)));
 
                 purchaseResult.OriginalPosIdentification = receiptPosIdentification;
                 purchaseResult.OriginalReceiptData = receiptDataParsed;
-                purchaseResult.ReceiptData = Utilities.ReceiptDataFormat(receiptData);
+                purchaseResult.ReceiptData = new PurchaseResultReceipt
+                {
+                    MerchantCopy = merchantReceipt,
+                    ClientCopy = clientReceipt
+                };
             }
 
             return new Result
             {
-                Success = message.Substring(2, 2).StartsWith(_okOpenPeriod),
+                Success = message.Substring(2, 2).StartsWith(_okMessage),
                 Message = message,
                 StatusCode = messageStatusCode,
                 StatusCodeDescription = Utilities.GetEnumDescription(messageStatusCode),
@@ -244,12 +342,45 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
             if (int.TryParse(statusCodeHex, NumberStyles.HexNumber, null, out int statusCodeInt) && Enum.IsDefined(typeof(StatusCode), statusCodeInt))
                 messageStatusCode = (StatusCode)statusCodeInt;
 
+            if (messageStatusCode == StatusCode.OKCommand)
+            {
+                //purchaseResult.TransactionId = transactionId;
+                //purchaseResult.Amount = amount;
+
+                DateTime.TryParseExact(
+                    $"{message.Substring(18, 8)} {message.Substring(107, 6)}",
+                    _dateTimeFormatOnPOS,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out DateTime receiptDataParsed
+                );
+
+                var receiptPosIdentification = message.Substring(26, 8);
+
+                var merchantReceiptBinaryPart = message.Substring(195).Substring(0, 2);
+                var merchantReceiptLenght = CalculateReceiptLenght(merchantReceiptBinaryPart);
+                var merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(198, merchantReceiptLenght)));
+
+                var clientReceiptBinaryPart = message.Substring(198 + merchantReceiptLenght).Substring(0, 2);
+                //var clientReceiptLenght = CalculateReceiptLenght(clientReceiptBinaryPart);
+                var clientReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(198 + merchantReceiptLenght + 2)));
+
+                purchaseResult.OriginalPosIdentification = receiptPosIdentification;
+                purchaseResult.OriginalReceiptData = receiptDataParsed;
+                purchaseResult.ReceiptData = new PurchaseResultReceipt
+                {
+                    MerchantCopy = merchantReceipt,
+                    ClientCopy = clientReceipt
+                };
+            }
+
             return new Result
             {
-                Success = message.Substring(2, 2).StartsWith(_okOpenPeriod),
+                Success = message.Substring(2, 2).StartsWith(_okMessage),
                 Message = message,
                 StatusCode = messageStatusCode,
-                StatusCodeDescription = Utilities.GetEnumDescription(messageStatusCode)
+                StatusCodeDescription = Utilities.GetEnumDescription(messageStatusCode),
+                ExtraData = purchaseResult
             };
         }
     }
