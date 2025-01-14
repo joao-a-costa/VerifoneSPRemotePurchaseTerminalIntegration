@@ -16,6 +16,8 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
 
         private const string _okMessage = "00";
         private const string _dateTimeFormatOnPOS = "yyyyMMdd HHmmss";
+        private const string _infoReceived = "Received";
+        private const string _infoErrorParsingMessage = "An error occurred while parsing the response: {Message}";
 
         #endregion
 
@@ -23,6 +25,7 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
 
         private readonly string serverIp;
         private readonly int port;
+        private readonly NLog.Logger logger;
 
         #endregion
 
@@ -43,10 +46,11 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
 
         #region "Constructors"
 
-        public VerifoneSPRemote(string serverIp, int port)
+        public VerifoneSPRemote(string serverIp, int port, NLog.Logger logger)
         {
             this.serverIp = serverIp;
             this.port = port;
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         #endregion
@@ -61,69 +65,78 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
         {
             var message = string.Empty;
 
-            MessageSent?.Invoke(this, command);
-
-            using (var client = new TcpClient(serverIp, port))
+            try
             {
-                using (var stream = client.GetStream())
+                MessageSent?.Invoke(this, command);
+                logger.Info("Sending command: {Command}", command);
+
+                using (var client = new TcpClient(serverIp, port))
                 {
-                    byte[] hexCommand = null;
-
-                    if (string.IsNullOrEmpty(tags))
-                        hexCommand = Utilities.ConvertHexStringToByteArray(command);
-                    else
-                        hexCommand = Utilities.ConvertHexStringToByteArray(string.Concat(Utilities.CalculateHexLength(command).Select(b => b.ToString("D2"))));
-                    stream.Write(hexCommand, 0, hexCommand.Length);
-
-                    var stringCommand = Encoding.ASCII.GetBytes(command);
-                    stream.Write(stringCommand, 0, stringCommand.Length);
-
-                    if (!string.IsNullOrEmpty(tags))
+                    using (var stream = client.GetStream())
                     {
-                        var hexCommandLast = Utilities.ConvertHexStringToByteArray(tags);
-                        stream.Write(hexCommandLast, 0, hexCommandLast.Length);
+                        byte[] hexCommand = null;
+
+                        if (string.IsNullOrEmpty(tags))
+                            hexCommand = Utilities.ConvertHexStringToByteArray(command);
+                        else
+                            hexCommand = Utilities.ConvertHexStringToByteArray(string.Concat(Utilities.CalculateHexLength(command).Select(b => b.ToString("D2"))));
+                        stream.Write(hexCommand, 0, hexCommand.Length);
+
+                        var stringCommand = Encoding.ASCII.GetBytes(command);
+                        stream.Write(stringCommand, 0, stringCommand.Length);
+
+                        if (!string.IsNullOrEmpty(tags))
+                        {
+                            var hexCommandLast = Utilities.ConvertHexStringToByteArray(tags);
+                            stream.Write(hexCommandLast, 0, hexCommandLast.Length);
+                        }
+
+                        // Receive the response
+                        byte[] response = new byte[20148];
+                        int bytesRead = stream.Read(response, 0, response.Length);
+
+                        // Process the response
+                        message = Encoding.ASCII.GetString(response, 0, bytesRead);
+                        Console.WriteLine("Response from terminal: " + message);
+                        logger.Info("{InfoReceived}: {Message}", _infoReceived, message);
+
+                        stream.Close();
                     }
 
-                    // Receive the response
-                    byte[] response = new byte[20148];
-                    int bytesRead = stream.Read(response, 0, response.Length);
-
-                    // Process the response
-                    message = Encoding.ASCII.GetString(response, 0, bytesRead);
-                    Console.WriteLine("Response from terminal: " + message);
-
-                    stream.Close();
+                    client.Close();
                 }
-
-                client.Close();
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "An error occurred while sending command: {Command}", command);
             }
 
             return message;
         }
 
-        /// <summary>
-        /// Calculates the length of the receipt.
-        /// </summary>
-        /// <param name="binaryPart">The binary part of the receipt.</param>
-        /// <returns>The length of the receipt.</returns>
-        private static int CalculateReceiptLenght(string binaryPart)
-        {
-            // Step 2: Convert each character to its ASCII hex representation
-            byte[] asciiBytes = Encoding.ASCII.GetBytes(binaryPart);
-            string asciiHex = BitConverter.ToString(asciiBytes).Replace("-", ""); // Get hex as a string
-            Console.WriteLine($"ASCII Hex: {asciiHex}"); // Output will be "0178" instead of "7801"
+        ///// <summary>
+        ///// Calculates the length of the receipt.
+        ///// </summary>
+        ///// <param name="binaryPart">The binary part of the receipt.</param>
+        ///// <returns>The length of the receipt.</returns>
+        //private static int CalculateReceiptLenght(string binaryPart)
+        //{
+        //    // Step 2: Convert each character to its ASCII hex representation
+        //    byte[] asciiBytes = Encoding.ASCII.GetBytes(binaryPart);
+        //    string asciiHex = BitConverter.ToString(asciiBytes).Replace("-", ""); // Get hex as a string
+        //    Console.WriteLine($"ASCII Hex: {asciiHex}"); // Output will be "0178" instead of "7801"
 
-            // Step 3: Swap endianness (change byte order)
-            //string swappedHex = asciiHex.Substring(2, 2) + asciiHex.Substring(0, 2); // Swap bytes: "0178" -> "7801"
-            string swappedHex = asciiHex;
-            Console.WriteLine($"Swapped Endianness: {swappedHex}"); // Output: "0178"
+        //    // Step 3: Swap endianness (change byte order)
+        //    //string swappedHex = asciiHex.Substring(2, 2) + asciiHex.Substring(0, 2); // Swap bytes: "0178" -> "7801"
+        //    string swappedHex = asciiHex;
+        //    Console.WriteLine($"Swapped Endianness: {swappedHex}"); // Output: "0178"
 
-            // Step 4: Convert to integer
-            int receiptLength = Convert.ToInt32(swappedHex, 16); // Convert from hex to integer
-            Console.WriteLine($"Receipt Length: {receiptLength} bytes"); // Output: 376
+        //    // Step 4: Convert to integer
+        //    int receiptLength = Convert.ToInt32(swappedHex, 16); // Convert from hex to integer
+        //    Console.WriteLine($"Receipt Length: {receiptLength} bytes"); // Output: 376
 
-            return receiptLength;
-        }
+        //    return receiptLength;
+        //}
 
         #endregion
 
@@ -167,29 +180,36 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
 
             if (messageStatusCode == StatusCode.OKCommand)
             {
-                //purchaseResult.TransactionId = transactionId;
-                //purchaseResult.Amount = amount;
-
-                //DateTime.TryParseExact(
-                //    $"{message.Substring(18, 8)} {message.Substring(107, 6)}",
-                //    _dateTimeFormatOnPOS,
-                //    CultureInfo.InvariantCulture,
-                //    DateTimeStyles.None,
-                //    out DateTime receiptDataParsed
-                //);
-
-                //var receiptPosIdentification = message.Substring(26, 8);
-                if (!printReceiptOnPOS)
+                try
                 {
-                    var merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(25)));
+                    //purchaseResult.TransactionId = transactionId;
+                    //purchaseResult.Amount = amount;
 
-                    //purchaseResult.OriginalPosIdentification = receiptPosIdentification;
-                    //purchaseResult.OriginalReceiptData = receiptDataParsed;
-                    purchaseResult.ReceiptData = new PurchaseResultReceipt
+                    //DateTime.TryParseExact(
+                    //    $"{message.Substring(18, 8)} {message.Substring(107, 6)}",
+                    //    _dateTimeFormatOnPOS,
+                    //    CultureInfo.InvariantCulture,
+                    //    DateTimeStyles.None,
+                    //    out DateTime receiptDataParsed
+                    //);
+
+                    //var receiptPosIdentification = message.Substring(26, 8);
+                    if (!printReceiptOnPOS)
                     {
-                        MerchantCopy = merchantReceipt,
-                        //ClientCopy = clientReceipt
-                    };
+                        var merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(25)));
+
+                        //purchaseResult.OriginalPosIdentification = receiptPosIdentification;
+                        //purchaseResult.OriginalReceiptData = receiptDataParsed;
+                        purchaseResult.ReceiptData = new PurchaseResultReceipt
+                        {
+                            MerchantCopy = merchantReceipt,
+                            //ClientCopy = clientReceipt
+                        };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.Error(ex, _infoErrorParsingMessage, message);
                 }
             }
 
@@ -225,34 +245,41 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
 
             if (messageStatusCode == StatusCode.OKCommand)
             {
-                //purchaseResult.TransactionId = transactionId;
-                //purchaseResult.Amount = amount;
-
-                //DateTime.TryParseExact(
-                //    $"{message.Substring(18, 8)} {message.Substring(107, 6)}",
-                //    _dateTimeFormatOnPOS,
-                //    CultureInfo.InvariantCulture,
-                //    DateTimeStyles.None,
-                //    out DateTime receiptDataParsed
-                //);
-
-                //var receiptPosIdentification = message.Substring(26, 8);
-                if (!printReceiptOnPOS)
+                try
                 {
-                    //var merchantReceiptBinaryPart = message.Substring(74).Substring(0, 2);
-                    //var merchantReceiptLenght = CalculateReceiptLenght(merchantReceiptBinaryPart);
-                    var merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(76, Math.Max(0, message.Length - 80))));
+                    //purchaseResult.TransactionId = transactionId;
+                    //purchaseResult.Amount = amount;
 
-                    // Remove last 4 charactes
+                    //DateTime.TryParseExact(
+                    //    $"{message.Substring(18, 8)} {message.Substring(107, 6)}",
+                    //    _dateTimeFormatOnPOS,
+                    //    CultureInfo.InvariantCulture,
+                    //    DateTimeStyles.None,
+                    //    out DateTime receiptDataParsed
+                    //);
 
-
-                    //purchaseResult.OriginalPosIdentification = receiptPosIdentification;
-                    //purchaseResult.OriginalReceiptData = receiptDataParsed;
-                    purchaseResult.ReceiptData = new PurchaseResultReceipt
+                    //var receiptPosIdentification = message.Substring(26, 8);
+                    if (!printReceiptOnPOS)
                     {
-                        MerchantCopy = merchantReceipt,
-                        //ClientCopy = clientReceipt
-                    };
+                        //var merchantReceiptBinaryPart = message.Substring(74).Substring(0, 2);
+                        //var merchantReceiptLenght = CalculateReceiptLenght(merchantReceiptBinaryPart);
+                        var merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(76, Math.Max(0, message.Length - 80))));
+
+                        // Remove last 4 charactes
+
+
+                        //purchaseResult.OriginalPosIdentification = receiptPosIdentification;
+                        //purchaseResult.OriginalReceiptData = receiptDataParsed;
+                        purchaseResult.ReceiptData = new PurchaseResultReceipt
+                        {
+                            MerchantCopy = merchantReceipt,
+                            //ClientCopy = clientReceipt
+                        };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.Error(ex, _infoErrorParsingMessage, message);
                 }
             }
 
@@ -292,38 +319,45 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
 
             if (messageStatusCode == StatusCode.OKCommand)
             {
-                purchaseResult.TransactionId = transactionId;
-                purchaseResult.Amount = amount;
-
-                DateTime.TryParseExact(
-                    $"{message.Substring(18, 8)} {message.Substring(107, 6)}",
-                    _dateTimeFormatOnPOS,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
-                    out DateTime receiptDataParsed
-                );
-
-                if (!printReceiptOnPOS)
+                try
                 {
-                    var receiptPosIdentification = message.Substring(26, 8);
+                    purchaseResult.TransactionId = transactionId;
+                    purchaseResult.Amount = amount;
 
-                    var receiptStrings = message.Substring(198).Split(new[] { (char)0x01 }, StringSplitOptions.None);
-                    var merchantReceipt = string.Empty;
-                    var clientReceipt = string.Empty;
+                    DateTime.TryParseExact(
+                        $"{message.Substring(18, 8)} {message.Substring(107, 6)}",
+                        _dateTimeFormatOnPOS,
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out DateTime receiptDataParsed
+                    );
 
-                    if (receiptStrings.Length >= 2)
+                    if (!printReceiptOnPOS)
                     {
-                        merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(receiptStrings[0].Substring(0, receiptStrings[0].Length - 1)));
-                        clientReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(receiptStrings[1]));
+                        var receiptPosIdentification = message.Substring(26, 8);
+
+                        var receiptStrings = message.Substring(198).Split(new[] { (char)0x01 }, StringSplitOptions.None);
+                        var merchantReceipt = string.Empty;
+                        var clientReceipt = string.Empty;
+
+                        if (receiptStrings.Length >= 2)
+                        {
+                            merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(receiptStrings[0].Substring(0, receiptStrings[0].Length - 1)));
+                            clientReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(receiptStrings[1]));
+                        }
+
+                        purchaseResult.OriginalPosIdentification = receiptPosIdentification;
+                        purchaseResult.OriginalReceiptData = receiptDataParsed;
+                        purchaseResult.ReceiptData = new PurchaseResultReceipt
+                        {
+                            MerchantCopy = merchantReceipt,
+                            ClientCopy = clientReceipt
+                        };
                     }
-
-                    purchaseResult.OriginalPosIdentification = receiptPosIdentification;
-                    purchaseResult.OriginalReceiptData = receiptDataParsed;
-                    purchaseResult.ReceiptData = new PurchaseResultReceipt
-                    {
-                        MerchantCopy = merchantReceipt,
-                        ClientCopy = clientReceipt
-                    };
+                }
+                catch (Exception ex)
+                {
+                    logger.Error(ex, _infoErrorParsingMessage, message);
                 }
             }
 
@@ -362,36 +396,43 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
 
             if (messageStatusCode == StatusCode.OKCommand)
             {
-                //purchaseResult.TransactionId = transactionId;
-                //purchaseResult.Amount = amount;
-
-                DateTime.TryParseExact(
-                    $"{message.Substring(18, 8)} {message.Substring(107, 6)}",
-                    _dateTimeFormatOnPOS,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
-                    out DateTime receiptDataParsed
-                );
-
-                var receiptPosIdentification = message.Substring(26, 8);
-
-                var receiptStrings = message.Substring(77).Split(new[] { (char)0x01 }, StringSplitOptions.None);
-                var merchantReceipt = string.Empty;
-                var clientReceipt = string.Empty;
-
-                if (receiptStrings.Length >= 2)
+                try
                 {
-                    merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(receiptStrings[0].Substring(0, receiptStrings[0].Length - 1)));
-                    clientReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(receiptStrings[1]));
+                    //purchaseResult.TransactionId = transactionId;
+                    //purchaseResult.Amount = amount;
+
+                    DateTime.TryParseExact(
+                        $"{message.Substring(18, 8)} {message.Substring(107, 6)}",
+                        _dateTimeFormatOnPOS,
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out DateTime receiptDataParsed
+                    );
+
+                    var receiptPosIdentification = message.Substring(26, 8);
+
+                    var receiptStrings = message.Substring(77).Split(new[] { (char)0x01 }, StringSplitOptions.None);
+                    var merchantReceipt = string.Empty;
+                    var clientReceipt = string.Empty;
+
+                    if (receiptStrings.Length >= 2)
+                    {
+                        merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(receiptStrings[0].Substring(0, receiptStrings[0].Length - 1)));
+                        clientReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(receiptStrings[1]));
+                    }
+
+                    purchaseResult.OriginalPosIdentification = receiptPosIdentification;
+                    purchaseResult.OriginalReceiptData = receiptDataParsed;
+                    purchaseResult.ReceiptData = new PurchaseResultReceipt
+                    {
+                        MerchantCopy = merchantReceipt,
+                        ClientCopy = clientReceipt
+                    };
                 }
-
-                purchaseResult.OriginalPosIdentification = receiptPosIdentification;
-                purchaseResult.OriginalReceiptData = receiptDataParsed;
-                purchaseResult.ReceiptData = new PurchaseResultReceipt
+                catch (Exception ex)
                 {
-                    MerchantCopy = merchantReceipt,
-                    ClientCopy = clientReceipt
-                };
+                    logger.Error(ex, _infoErrorParsingMessage, message);
+                }
             }
 
             return new Result
