@@ -149,10 +149,14 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
         /// Opens the period.
         /// </summary>
         /// <param name="transactionId">The transaction identifier.</param>
-        public Result OpenPeriod()
+        public Result OpenPeriod(bool useSupervisorCard = false, bool printReceiptOnPOS = true)
         {
             var purchaseResult = new PurchaseResult();
-            var message = SendCommand(new OpenPeriod().ToString());
+            var message = SendCommand(new OpenPeriod
+            {
+                UseSupervisorCard = useSupervisorCard,
+                PrintReceiptOnPOS = printReceiptOnPOS
+            }.ToString());
             SendCommand(new IdleState().ToString());
             var messageStatusCode = StatusCode.Error;
 
@@ -175,18 +179,18 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
                 //);
 
                 //var receiptPosIdentification = message.Substring(26, 8);
-
-                var merchantReceiptBinaryPart = message.Substring(21).Substring(0, 2);
-                var merchantReceiptLenght = CalculateReceiptLenght(merchantReceiptBinaryPart);
-                var merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(23, merchantReceiptLenght)));
-
-                //purchaseResult.OriginalPosIdentification = receiptPosIdentification;
-                //purchaseResult.OriginalReceiptData = receiptDataParsed;
-                purchaseResult.ReceiptData = new PurchaseResultReceipt
+                if (!printReceiptOnPOS)
                 {
-                    MerchantCopy = merchantReceipt,
-                    //ClientCopy = clientReceipt
-                };
+                    var merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(25)));
+
+                    //purchaseResult.OriginalPosIdentification = receiptPosIdentification;
+                    //purchaseResult.OriginalReceiptData = receiptDataParsed;
+                    purchaseResult.ReceiptData = new PurchaseResultReceipt
+                    {
+                        MerchantCopy = merchantReceipt,
+                        //ClientCopy = clientReceipt
+                    };
+                }
             }
 
             return new Result
@@ -203,10 +207,14 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
         /// Closes the period.
         /// </summary>
         /// <param name="transactionId">The transaction identifier.</param>
-        public Result ClosePeriod()
+        public Result ClosePeriod(bool useSupervisorCard = false, bool printReceiptOnPOS = true)
         {
             var purchaseResult = new PurchaseResult();
-            var message = SendCommand(new ClosePeriod().ToString());
+            var message = SendCommand(new ClosePeriod
+            {
+                UseSupervisorCard = useSupervisorCard,
+                PrintReceiptOnPOS = printReceiptOnPOS
+            }.ToString());
             SendCommand(new IdleState().ToString());
             var messageStatusCode = StatusCode.Error;
 
@@ -229,18 +237,23 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
                 //);
 
                 //var receiptPosIdentification = message.Substring(26, 8);
-
-                var merchantReceiptBinaryPart = message.Substring(71).Substring(0, 2);
-                var merchantReceiptLenght = CalculateReceiptLenght(merchantReceiptBinaryPart);
-                var merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(73, merchantReceiptLenght)));
-
-                //purchaseResult.OriginalPosIdentification = receiptPosIdentification;
-                //purchaseResult.OriginalReceiptData = receiptDataParsed;
-                purchaseResult.ReceiptData = new PurchaseResultReceipt
+                if (!printReceiptOnPOS)
                 {
-                    MerchantCopy = merchantReceipt,
-                    //ClientCopy = clientReceipt
-                };
+                    //var merchantReceiptBinaryPart = message.Substring(74).Substring(0, 2);
+                    //var merchantReceiptLenght = CalculateReceiptLenght(merchantReceiptBinaryPart);
+                    var merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(76, Math.Max(0, message.Length - 80))));
+
+                    // Remove last 4 charactes
+
+
+                    //purchaseResult.OriginalPosIdentification = receiptPosIdentification;
+                    //purchaseResult.OriginalReceiptData = receiptDataParsed;
+                    purchaseResult.ReceiptData = new PurchaseResultReceipt
+                    {
+                        MerchantCopy = merchantReceipt,
+                        //ClientCopy = clientReceipt
+                    };
+                }
             }
 
             return new Result
@@ -290,23 +303,28 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
                     out DateTime receiptDataParsed
                 );
 
-                var receiptPosIdentification = message.Substring(26, 8);
-
-                var merchantReceiptBinaryPart = message.Substring(195).Substring(0, 2);
-                var merchantReceiptLenght = CalculateReceiptLenght(merchantReceiptBinaryPart);
-                var merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(198, merchantReceiptLenght)));
-
-                var clientReceiptBinaryPart = message.Substring(198 + merchantReceiptLenght).Substring(0, 2);
-                //var clientReceiptLenght = CalculateReceiptLenght(clientReceiptBinaryPart);
-                var clientReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(198 + merchantReceiptLenght + 2)));
-
-                purchaseResult.OriginalPosIdentification = receiptPosIdentification;
-                purchaseResult.OriginalReceiptData = receiptDataParsed;
-                purchaseResult.ReceiptData = new PurchaseResultReceipt
+                if (!printReceiptOnPOS)
                 {
-                    MerchantCopy = merchantReceipt,
-                    ClientCopy = clientReceipt
-                };
+                    var receiptPosIdentification = message.Substring(26, 8);
+
+                    var receiptStrings = message.Substring(198).Split(new[] { (char)0x01 }, StringSplitOptions.None);
+                    var merchantReceipt = string.Empty;
+                    var clientReceipt = string.Empty;
+
+                    if (receiptStrings.Length >= 2)
+                    {
+                        merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(receiptStrings[0].Substring(0, receiptStrings[0].Length - 1)));
+                        clientReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(receiptStrings[1]));
+                    }
+
+                    purchaseResult.OriginalPosIdentification = receiptPosIdentification;
+                    purchaseResult.OriginalReceiptData = receiptDataParsed;
+                    purchaseResult.ReceiptData = new PurchaseResultReceipt
+                    {
+                        MerchantCopy = merchantReceipt,
+                        ClientCopy = clientReceipt
+                    };
+                }
             }
 
             return new Result
@@ -357,13 +375,15 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
 
                 var receiptPosIdentification = message.Substring(26, 8);
 
-                var merchantReceiptBinaryPart = message.Substring(195).Substring(0, 2);
-                var merchantReceiptLenght = CalculateReceiptLenght(merchantReceiptBinaryPart);
-                var merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(198, merchantReceiptLenght)));
+                var receiptStrings = message.Substring(77).Split(new[] { (char)0x01 }, StringSplitOptions.None);
+                var merchantReceipt = string.Empty;
+                var clientReceipt = string.Empty;
 
-                var clientReceiptBinaryPart = message.Substring(198 + merchantReceiptLenght).Substring(0, 2);
-                //var clientReceiptLenght = CalculateReceiptLenght(clientReceiptBinaryPart);
-                var clientReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(message.Substring(198 + merchantReceiptLenght + 2)));
+                if (receiptStrings.Length >= 2)
+                {
+                    merchantReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(receiptStrings[0].Substring(0, receiptStrings[0].Length - 1)));
+                    clientReceipt = Encoding.UTF8.GetString(Convert.FromBase64String(receiptStrings[1]));
+                }
 
                 purchaseResult.OriginalPosIdentification = receiptPosIdentification;
                 purchaseResult.OriginalReceiptData = receiptDataParsed;
