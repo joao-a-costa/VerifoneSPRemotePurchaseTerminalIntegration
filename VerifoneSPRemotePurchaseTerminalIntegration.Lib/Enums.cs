@@ -16,6 +16,8 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
             SendProcessPaymentRequest = 4,
             [Description("Send terminal refund request")]
             SendProcessRefundRequest = 5,
+            [Description("Parse purchase response")]
+            ParsePurchaseResponse = 6,
             [Description("Show list of commands")]
             ShowListOfCommands = 9998,
             [Description("Stop listening")]

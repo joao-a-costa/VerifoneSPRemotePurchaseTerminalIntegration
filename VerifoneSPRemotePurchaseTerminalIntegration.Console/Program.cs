@@ -17,7 +17,7 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Console
 
         #region "Members"
 
-        private static readonly string serverIp = "192.168.40.175";
+        private static readonly string serverIp = "192.168.40.108";
         private static readonly int port = 5005;
 
         private static VerifoneSPRemote VerifoneSPRemote = null;
@@ -84,6 +84,9 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Console
                             else
                                 VerifoneSPRemote.Refund((PurchaseResult)lastProcessPaymentResult.ExtraData);
                             break;
+                        case TerminalCommandOptions.ParsePurchaseResponse:
+                            ParsePurchaseResponse();
+                            break;
                         case TerminalCommandOptions.ShowListOfCommands:
                             ShowListOfCommands();
                             break;
@@ -111,6 +114,17 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Console
                 System.Console.WriteLine($"   {(int)command} - {Utilities.GetEnumDescription(command)}");
             }
             System.Console.WriteLine();
+        }
+
+        private static void ParsePurchaseResponse()
+        {
+            System.Console.WriteLine("Insert a valid message...");
+
+            var input = System.Console.ReadLine()?.ToLower();
+
+            var res = VerifoneSPRemote.ParsePurchaseResponse(false, new PurchaseResult(), input);
+
+            System.Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(res, Newtonsoft.Json.Formatting.Indented));
         }
 
         #endregion
