@@ -415,9 +415,13 @@ namespace VerifoneSPRemotePurchaseTerminalIntegration.Lib
 
                     var receiptPosIdentification = message.Substring(26, 8);
 
-                    var receiptStrings = message.Substring(77).Split(new[] { (char)0x01 }, StringSplitOptions.None);
+                    var messagedSubString = message.Substring(77);
+                    var receiptStrings = messagedSubString.Split(new[] { (char)0x01 }, StringSplitOptions.None);
                     var merchantReceipt = string.Empty;
                     var clientReceipt = string.Empty;
+
+                    if (receiptStrings.Length >= 1)
+                        receiptStrings = messagedSubString.Split(new[] { (char)0x02 }, StringSplitOptions.None);
 
                     if (receiptStrings.Length >= 2)
                     {
